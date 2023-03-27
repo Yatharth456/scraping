@@ -1,87 +1,59 @@
-import requests
-from bs4 import BeautifulSoup
-import sqlite3
+from bs4 import BeautifulSoup as soup
+from urllib.request import urlopen
+import sqlite3, time, requests
 
-conn = sqlite3.connect('test.db')
-print("Opened database successfully")
-
-conn.execute('''CREATE TABLE IF NOT EXISTS scrape
-         (ID INTEGER PRIMARY KEY AUTOINCREMENT,
-         Product_name TEXT,
-         Product_price TEXT,
-         Product_rating TEXT,
-         Product_desc TEXT);''')
-cur = conn.cursor()
-
-print("TABLE CREATED")
-
-Product_name = []
-Product_price = []
-Product_desc = []
-Product_rating = []
+url = "https://www.flipkart.com/search?q=iphone+14"
 
 
-# for i in range(1,12):
-url = "https://www.flipkart.com/search?q=xiaomi%20mobiles&otracker=search&otracker1=search&marketplace=FLIPKART&as-show=on&as=off"
-r = requests.get(url)
+while True:
+  response = requests.get(url)
+  soupdata = soup(response.content, "html.parser")
+  # print(soupdata)
+  containers = soupdata.find_all('div', {'class': '_2kHMtA'})
+  my_list = []
+  
+  for container in containers:
+    name = container.find('div', {'class': '_4rR01T'})
+    NAMES = name.text
+    stars = container.find('div', {'class':'_3LWZlK'})
+    try:
+      STARS = stars.text
+    except:
+      STARS = 0
 
-soup = BeautifulSoup(r.text, "lxml")
-# print(soup.prettify())
-limited_data = soup.find("div", class_ = "_1YokD2 _3Mn1Gg")
+    ratings = container.find('span', {'class':'_2_R_DZ'})
+    try:
+      RATINGS = ratings.text
+    except:
+      RATINGS = 0
+    prices = container.find('div', {'class': '_30jeq3 _1_WHN1'})
+    PRICES = prices.text
+    # print(NAMES, STARS, RATINGS, PRICES)
+    # print('\n')
+    my_tuple = (NAMES,STARS,RATINGS,PRICES)
+    my_list.append(my_tuple)
+  # print(my_list)
+  nav = soupdata.find('nav', {'class': 'yFHi8N'})
+  # print(nav)
+  links = nav.find_all('a')
+  print('links',links[-1].find('span'))
 
-names = limited_data.find_all("div", class_ = "_4rR01T")
+  url = 'https://www.flipkart.com'+links[-1]['href']
 
-for i in names:
-    name = i.text
-    Product_name.append(name)
-
-prices = limited_data.find_all("div", class_ ="_30jeq3 _1_WHN1")
-for i in prices:
-    price = i.text
-    Product_price.append(price)
-
-description = limited_data.find_all("ul", class_ = "_1xgFaf")
-for i in description:
-    review = i.text
-    Product_desc.append(review)
-
-ratings = limited_data.find_all("div", class_ = "_3LWZlK")
-for i in ratings:
-    rating = i.text
-    Product_rating.append(rating)
-
-my_dict = [{
-    "Product_name": Product_name,
-    "Product_price": Product_price,
-    "Product_rating": Product_rating,
-    "Product_desc.": Product_desc
-}]
-
-columns = list(my_dict[0].keys())
-print(columns,"colums")
-# sql_cmd = 'INSERT INTO scrape ({}) VALUES ({})'.format('.'.join(columns), ','.join(['?'] * len(columns)))
-
-for data in my_dict:
-    values = [data[column] for column in columns]
-    conn.execute('INSERT INTO scrape ({}) VALUES ({})'.format('.'.join(columns), ','.join(['?'] * len(columns))), values)
-
-conn.commit()
-print ("Records created successfully")
-cur.close()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# cur.execute("""INSERT INTO scrap (Product_name, Product_price, Product_rating, Product_desc) VALUES (?, ?, ?, ?)""",
-    #             (str(my_dict['Product Name']), str(my_dict['Product Price']), str(my_dict['Product Rating']), str(my_dict['Product Desc.'])))
+  if links[-1].find('span') is None:
+    break
+  
+  print("url",url)
+  time.sleep(1)
+  conn = sqlite3.connect('test.db')
+  conn.execute('''CREATE TABLE IF NOT EXISTS dicts
+          (
+          Product_name TEXT,
+          Product_price TEXT,
+          Product_rating TEXT,
+          Product_stars TEXT);''')
+  cur = conn.cursor()
+  # cur.execute("DROP TABLE dicts")
+  cur.executemany("""INSERT INTO dicts VALUES (?, ?, ?, ?)""", my_list)
+  conn.commit()
+  cur.close()
